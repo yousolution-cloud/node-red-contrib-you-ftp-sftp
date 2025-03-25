@@ -14,7 +14,6 @@
  * limitations under the License.
  **/
 
-const ftp = require('basic-ftp');
 
 module.exports = function (RED) {
   'use strict';
@@ -52,27 +51,34 @@ module.exports = function (RED) {
     this.workdir = n.workdir;
     this.ftpConfig = RED.nodes.getNode(this.ftp);
 
-    const client = new ftp.Client();
 
     if (this.ftpConfig) {
       const node = this;
       // console.log("FTP ftpConfig: " + JSON.stringify(this.ftpConfig));
       node.on('input', async (msg, send, done) => {
+        const ftp = require('basic-ftp');
+        const client = new ftp.Client();
+        console.log("Creating client")
+
         try {
           // const client = new ftp.Client();
           node.workdir = node.workdir || msg.workdir || './';
           node.fileExtension = node.fileExtension || msg.fileExtension || '';
 
-          /*FTP options*/
-          node.ftpConfig.options.host = msg.host || node.ftpConfig.options.host;
-          node.ftpConfig.options.port = msg.port || node.ftpConfig.options.port;
-          node.ftpConfig.options.user = msg.user || node.ftpConfig.options.user;
-          node.ftpConfig.options.password = msg.password || node.ftpConfig.options.password;
-          node.ftpConfig.options.pass = msg.pass || msg.password || node.ftpConfig.options.pass;
-          node.ftpConfig.options.secure = false;
+          /*FTP options - create local copy to avoid shared mutation*/
+          const ftpOptions = {
+            host: msg.host || node.ftpConfig.options.host,
+            port: msg.port || node.ftpConfig.options.port,
+            user: msg.user || node.ftpConfig.options.user,
+            password: msg.password || node.ftpConfig.options.password,
+            secure: false,
+            connTimeout: node.ftpConfig.options.connTimeout,
+            pasvTimeout: node.ftpConfig.options.pasvTimeout,
+            keepalive: node.ftpConfig.options.keepalive,
+          };
 
           try {
-            await client.access(node.ftpConfig.options);
+            await client.access(ftpOptions);
             // client.ftp.verbose = true;
           } catch (err) {
             console.log(err);

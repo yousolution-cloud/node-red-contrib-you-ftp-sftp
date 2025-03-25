@@ -315,8 +315,11 @@ module.exports = function (RED) {
               msgData = msg.payload.filedata ? msg.payload.filedata : JSON.stringify(msg.payload);
               // console.log(newFile);
               node.status({});
+
+              const { Readable } = require('stream');
+              const buffer = new Buffer.from(msgData);
               try {
-                await client.put(msgData, newFile);
+                await client.put(Readable.from(buffer), newFile);
                 node.status({ fill: 'green', shape: 'dot', text: 'put done' });
                 await client.end();
                 msg.payload = {};
