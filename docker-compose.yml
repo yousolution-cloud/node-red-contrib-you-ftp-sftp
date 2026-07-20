@@ -10,8 +10,16 @@ services:
       - ./data:/data
     ports:
       - '1880:1880'
-    environment:
-      NODE_ENV: 'dev'
+
+  # deploy:
+  #   resources:
+  #     limits:
+  #       # cpus: 0.50
+  #       memory: 45M
+
+  # environment:
+  #   NODE_ENV: 'dev'
+  #   NODE_OPTIONS: '--max-old-space-size=40'
 
   ftps:
     image: stilliard/pure-ftpd
@@ -32,3 +40,15 @@ services:
       TLS_CN: 'localhost'
       TLS_ORG: 'YourOrg'
       TLS_C: 'DE'
+
+  # pure-ftpd:
+  #   container_name: ftp
+  #   image: stilliard/pure-ftpd
+  #   ports:
+  #     - 21:21
+  #     - 30000-30009:30000-30009
+  #   environment:
+  #     PUBLICHOST: '0.0.0.0'
+  #     FTP_USER_NAME: foo
+  #     FTP_USER_PASS: pass
+  #     FTP_USER_HOME: /home/foo

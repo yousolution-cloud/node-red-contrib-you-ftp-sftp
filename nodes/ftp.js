@@ -14,6 +14,8 @@
  * limitations under the License.
  **/
 
+const ftp = require('basic-ftp');
+
 module.exports = function (RED) {
   'use strict';
   // var ftp = require('ftp');
@@ -50,11 +52,14 @@ module.exports = function (RED) {
     this.workdir = n.workdir;
     this.ftpConfig = RED.nodes.getNode(this.ftp);
 
+    const client = new ftp.Client();
+
     if (this.ftpConfig) {
       const node = this;
       // console.log("FTP ftpConfig: " + JSON.stringify(this.ftpConfig));
-      node.on('input', (msg, send, done) => {
+      node.on('input', async (msg, send, done) => {
         try {
+          // const client = new ftp.Client();
           node.workdir = node.workdir || msg.workdir || './';
           node.fileExtension = node.fileExtension || msg.fileExtension || '';
 
@@ -64,49 +69,59 @@ module.exports = function (RED) {
           node.ftpConfig.options.user = msg.user || node.ftpConfig.options.user;
           node.ftpConfig.options.password = msg.password || node.ftpConfig.options.password;
           node.ftpConfig.options.pass = msg.pass || msg.password || node.ftpConfig.options.pass;
+          node.ftpConfig.options.secure = false;
 
-          const JSFtp = require('jsftp');
+          try {
+            await client.access(node.ftpConfig.options);
+            // client.ftp.verbose = true;
+          } catch (err) {
+            console.log(err);
+          }
 
-          const Ftp = new JSFtp(node.ftpConfig.options);
+          // const JSFtp = require('jsftp');
+
+          // const Ftp = new JSFtp(node.ftpConfig.options);
           switch (node.operation) {
             case 'list':
               console.log('FTP List:' + node.workdir.toString());
-              Ftp.ls(node.workdir, (err, data) => {
-                // console.log(data);
+              try {
+                let data = await client.list(node.workdir);
                 msg.payload = data;
+                client.close();
                 node.send(msg);
-              });
+              } catch (err) {
+                client.close();
+                done(err);
+              }
               break;
+
             case 'get':
               let ftpfilename = node.workdir + node.filename;
               if (msg.payload.filename) ftpfilename = msg.payload.filename;
-              var str = '';
+              let str = '';
               console.log('FTP Get:' + ftpfilename);
-              Ftp.get(ftpfilename, (err, socket) => {
-                if (err) {
-                  // node.error(err, msg);
-                  done(err);
-                } else {
-                  socket.on('data', (d) => {
-                    str += d.toString();
-                  });
 
-                  socket.on('close', (err) => {
-                    if (err) {
-                      // node.error(err, msg);
-                      done(err);
-                    }
-
-                    node.status({});
-                    msg.payload = {};
-                    msg.payload.filedata = str;
-                    msg.payload.filename = ftpfilename;
-                    node.send(msg);
-                  });
-                  socket.resume();
-                }
+              const stream = require('stream');
+              const dataStream = new stream.Writable({
+                write: function (chunk, encoding, next) {
+                  str += chunk.toString();
+                  next();
+                },
               });
+              try {
+                await client.downloadTo(dataStream, ftpfilename);
+                node.status({});
+                msg.payload = {};
+                msg.payload.filedata = str;
+                msg.payload.filename = ftpfilename;
+                client.close();
+                node.send(msg);
+              } catch (err) {
+                client.close();
+                done(err);
+              }
               break;
+
             case 'put':
               let newFile = '';
               if (msg.payload.filename) {
@@ -126,39 +141,39 @@ module.exports = function (RED) {
 
               console.log('FTP Put:' + newFile);
 
-              // let Ftp = new JSFtp(node.ftpConfig.options);
+              // let Ftp = new JSFtp(node.ftpsConfig.options);
 
-              const buffer = new Buffer(msgData);
-
-              Ftp.put(buffer, newFile, (err) => {
-                if (err) {
-                  // node.error(err, msg);
-                  done(err);
-                } else {
-                  node.status({});
-                  msg.payload = {};
-                  msg.payload.filename = newFile;
-                  node.send(msg);
-                }
-              });
+              const { Readable } = require('stream');
+              const buffer = new Buffer.from(msgData);
+              try {
+                await client.uploadFrom(Readable.from(buffer), newFile);
+                node.status({});
+                msg.payload = {};
+                msg.payload.filename = newFile;
+                client.close();
+                node.send(msg);
+              } catch (err) {
+                client.close();
+                done(err);
+              }
               break;
+
             case 'delete':
               let delFile = '';
               if (msg.payload.filename) delFile = msg.payload.filename;
               else delFile = node.workdir + node.filename;
               console.log('FTP Delete:' + delFile);
-              // var Ftp = new JSFtp(node.ftpConfig.options);
-              Ftp.raw('dele', delFile, (err, data) => {
-                if (err) {
-                  // node.error(err, msg);
-                  done(err);
-                } else {
-                  node.status({});
-                  msg.payload = {};
-                  msg.payload.filename = delFile;
-                  node.send(msg);
-                }
-              });
+              try {
+                await client.remove(delFile);
+                node.status({});
+                msg.payload = {};
+                msg.payload.filename = delFile;
+                client.close();
+                node.send(msg);
+              } catch (err) {
+                client.close();
+                done(err);
+              }
               break;
           }
         } catch (error) {

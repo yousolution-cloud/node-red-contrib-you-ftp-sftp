@@ -53,6 +53,8 @@ module.exports = function (RED) {
     this.workdir = n.workdir;
     this.ftpsConfig = RED.nodes.getNode(this.ftps);
 
+    const client = new ftps.Client();
+
     if (this.ftpsConfig) {
       const node = this;
       // console.log("FTP ftpsConfig: " + JSON.stringify(this.ftpsConfig));
@@ -72,8 +74,7 @@ module.exports = function (RED) {
             rejectUnauthorized: false,
           };
 
-          const client = new ftps.Client();
-          client.ftp.verbose = true;
+          // client.ftp.verbose = true;
 
           try {
             await client.access(node.ftpsConfig.options);
@@ -93,6 +94,7 @@ module.exports = function (RED) {
                 let data = await client.list(node.workdir);
                 msg.payload = data;
                 client.close();
+                // client = null;
                 node.send(msg);
               } catch (err) {
                 client.close();
