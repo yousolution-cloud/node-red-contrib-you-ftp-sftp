@@ -11,7 +11,10 @@
     "sftp:keygen:force": "rm -f sftp/keys/id_rsa sftp/keys/id_rsa.pub && npm run sftp:keygen",
     "sftp:up": "docker compose up -d sftp",
     "sftp:down": "docker compose stop sftp",
-    "sftp:logs": "docker compose logs -f sftp"
+    "sftp:logs": "docker compose logs -f sftp",
+    "ftps:up": "docker compose up -d ftps",
+    "ftps:down": "docker compose stop ftps",
+    "ftps:logs": "docker compose logs -f ftps"
   },
   "repository": {
     "type": "git",
