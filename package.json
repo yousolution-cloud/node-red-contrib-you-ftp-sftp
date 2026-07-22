@@ -1,6 +1,6 @@
 {
   "name": "@yousolution/node-red-contrib-you-ftp-sftp",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "A node-red node that support FTP and SFTP file transfer using $() environment variables to control the ftp connection details",
   "main": "sftp.js",
   "scripts": {
