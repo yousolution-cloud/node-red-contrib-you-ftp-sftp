@@ -49,9 +49,18 @@ module.exports = function (RED) {
     let keyFile = null;
     let keyData = null;
 
-    if (n.sshkey) {
-      keyFile = 'keyFile';
-      keyData = n.sshkey;
+    // New UI: key content stored in credentials (encrypted)
+    if (this.credentials && this.credentials.sshkeydata) {
+      keyFile = 'credentials';
+      keyData = this.credentials.sshkeydata;
+    }
+    // Backward compat: old flows store key content directly in n.sshkey
+    if (n.sshkey && !keyData) {
+      const trimmed = n.sshkey.trim();
+      if (trimmed.startsWith('-----BEGIN ') || trimmed.startsWith('PuTTY-User-Key-File-')) {
+        keyFile = 'keyFile';
+        keyData = n.sshkey;
+      }
     }
     if (process.env.SFTP_SSH_KEY_FILE) {
       keyFile = process.env.SFTP_SSH_KEY_FILE;
@@ -60,161 +69,91 @@ module.exports = function (RED) {
 
       try {
         keyData = fs.readFileSync(keyFile).toString();
-        // console.log("[http://wwww.HardingPoint.com PRIVATE KEY] " + keyData);
       } catch (e) {
         keyData = null;
         console.log('SFTP - Read Key File [' + keyFile + '] Exception : ' + e);
       }
     }
 
+    const algorithms = {
+      kex: [
+        'curve25519-sha256',
+        'curve25519-sha256@libssh.org',
+        'ecdh-sha2-nistp256',
+        'ecdh-sha2-nistp384',
+        'ecdh-sha2-nistp521',
+        'diffie-hellman-group-exchange-sha256',
+        'diffie-hellman-group14-sha256',
+        'diffie-hellman-group15-sha512',
+        'diffie-hellman-group16-sha512',
+        'diffie-hellman-group17-sha512',
+        'diffie-hellman-group18-sha512',
+        'diffie-hellman-group-exchange-sha1',
+        'diffie-hellman-group14-sha1',
+        'diffie-hellman-group1-sha1',
+      ],
+      cipher: [
+        'chacha20-poly1305@openssh.com',
+        'aes128-gcm',
+        'aes128-gcm@openssh.com',
+        'aes256-gcm',
+        'aes256-gcm@openssh.com',
+        'aes128-ctr',
+        'aes192-ctr',
+        'aes256-ctr',
+        '3des-cbc',
+        'aes256-cbc',
+        'aes192-cbc',
+        'aes128-cbc',
+      ],
+      serverHostKey: [
+        'ssh-ed25519',
+        'ecdsa-sha2-nistp256',
+        'ecdsa-sha2-nistp384',
+        'ecdsa-sha2-nistp521',
+        'rsa-sha2-512',
+        'rsa-sha2-256',
+        'ssh-rsa',
+        'ssh-dss',
+      ],
+      hmac: [
+        'hmac-sha2-256-etm@openssh.com',
+        'hmac-sha2-512-etm@openssh.com',
+        'hmac-sha1-etm@openssh.com',
+        'hmac-sha2-256',
+        'hmac-sha2-512',
+        'hmac-sha1',
+        'hmac-md5',
+        'hmac-sha2-256-96',
+        'hmac-sha2-512-96',
+      ],
+    };
+
+    this.options = {
+      host: n.host || 'localhost',
+      port: n.port || 21,
+      username: n.username,
+      password: n.password,
+      algorithms,
+    };
+
     if (keyFile && keyData) {
-      console.log('SFTP - Using key file');
-      // console.log('*******************');
-      // console.log('SFTP - Username: ' + n.username);
-      // console.log('SFTP - Using privateKey: ' + keyFile + ' Length: ' + keyData.toString().length);
-      // console.log('*******************');
-      this.options = {
-        host: n.host || 'localhost',
-        port: n.port || 21,
-        username: n.username,
-        password: n.password,
-        privateKey: keyData,
-        algorithms: {
-          kex: [
-            'curve25519-sha256',
-            'curve25519-sha256@libssh.org',
-            'ecdh-sha2-nistp256',
-            'ecdh-sha2-nistp384',
-            'ecdh-sha2-nistp521',
-            'diffie-hellman-group-exchange-sha256',
-            'diffie-hellman-group14-sha256',
-            'diffie-hellman-group15-sha512',
-            'diffie-hellman-group16-sha512',
-            'diffie-hellman-group17-sha512',
-            'diffie-hellman-group18-sha512',
-            'diffie-hellman-group-exchange-sha1',
-            'diffie-hellman-group14-sha1',
-            'diffie-hellman-group1-sha1',
-          ],
-          cipher: [
-            'chacha20-poly1305@openssh.com',
-            'aes128-gcm',
-            'aes128-gcm@openssh.com',
-            'aes256-gcm',
-            'aes256-gcm@openssh.com',
-            'aes128-ctr',
-            'aes192-ctr',
-            'aes256-ctr',
-            '3des-cbc',
-            'aes256-cbc',
-            'aes192-cbc',
-            'aes128-cbc',
-            // 'arcfour256',
-            // 'arcfour128',
-            // 'arcfour',
-            // 'blowfish-cbc',
-            // 'ast128-cbc',
-          ],
-          serverHostKey: [
-            'ssh-ed25519',
-            'ecdsa-sha2-nistp256',
-            'ecdsa-sha2-nistp384',
-            'ecdsa-sha2-nistp521',
-            'rsa-sha2-512',
-            'rsa-sha2-256',
-            'ssh-rsa',
-            'ssh-dss',
-          ],
-          hmac: [
-            'hmac-sha2-256-etm@openssh.com',
-            'hmac-sha2-512-etm@openssh.com',
-            'hmac-sha1-etm@openssh.com',
-            'hmac-sha2-256',
-            'hmac-sha2-512',
-            'hmac-sha1',
-            'hmac-md5',
-            'hmac-sha2-256-96',
-            'hmac-sha2-512-96',
-            // 'hmac-ripemd160',
-            // 'hmac-sha1-96',
-            // 'hmac-md5-96',
-          ],
-        },
-      };
+      const isPPK = typeof keyData === 'string' && keyData.includes('PuTTY-User-Key-File-');
+      if (isPPK) {
+        const isEncrypted = !/Encryption:\s*none/i.test(keyData);
+        this.ppkPassphrase = n.ppkpassphrase || '';
+        if (isEncrypted && !this.ppkPassphrase) {
+          console.log('SFTP - WARNING: PPK key is encrypted but no passphrase provided. Set the passphrase in the config or use msg.ppkpassphrase at runtime.');
+        }
+        console.log('SFTP - Using PPK key file' + (isEncrypted ? ' (encrypted)' : ' (unencrypted)'));
+        this.rawKey = keyData;
+        this.ppkDetected = true;
+      } else {
+        console.log('SFTP - Using key file');
+        this.options.privateKey = keyData;
+      }
     } else {
-      // console.log('*******************');
       console.log('SFTP - Using User/Pwd');
-      // console.log('SFTP - Username: ' + n.username);
-      // console.log('SFTP - Password: ' + n.password);
-      // console.log('SFTP - Using privateKey: ' + keyFile + ' Length: ' + keyData?.toString().length);
-      // console.log('*******************');
-      this.options = {
-        host: n.host || 'localhost',
-        port: n.port || 21,
-        username: n.username,
-        password: n.password,
-        algorithms: {
-          kex: [
-            'curve25519-sha256',
-            'curve25519-sha256@libssh.org',
-            'ecdh-sha2-nistp256',
-            'ecdh-sha2-nistp384',
-            'ecdh-sha2-nistp521',
-            'diffie-hellman-group-exchange-sha256',
-            'diffie-hellman-group14-sha256',
-            'diffie-hellman-group15-sha512',
-            'diffie-hellman-group16-sha512',
-            'diffie-hellman-group17-sha512',
-            'diffie-hellman-group18-sha512',
-            'diffie-hellman-group-exchange-sha1',
-            'diffie-hellman-group14-sha1',
-            'diffie-hellman-group1-sha1',
-          ],
-          cipher: [
-            'chacha20-poly1305@openssh.com',
-            'aes128-gcm',
-            'aes128-gcm@openssh.com',
-            'aes256-gcm',
-            'aes256-gcm@openssh.com',
-            'aes128-ctr',
-            'aes192-ctr',
-            'aes256-ctr',
-            '3des-cbc',
-            'aes256-cbc',
-            'aes192-cbc',
-            'aes128-cbc',
-            // 'arcfour256',
-            // 'arcfour128',
-            // 'arcfour',
-            // 'blowfish-cbc',
-            // 'ast128-cbc',
-          ],
-          serverHostKey: [
-            'ssh-ed25519',
-            'ecdsa-sha2-nistp256',
-            'ecdsa-sha2-nistp384',
-            'ecdsa-sha2-nistp521',
-            'rsa-sha2-512',
-            'rsa-sha2-256',
-            'ssh-rsa',
-            'ssh-dss',
-          ],
-          hmac: [
-            'hmac-sha2-256-etm@openssh.com',
-            'hmac-sha2-512-etm@openssh.com',
-            'hmac-sha1-etm@openssh.com',
-            'hmac-sha2-256',
-            'hmac-sha2-512',
-            'hmac-sha1',
-            'hmac-md5',
-            'hmac-sha2-256-96',
-            'hmac-sha2-512-96',
-            // 'hmac-ripemd160',
-            // 'hmac-sha1-96',
-            // 'hmac-md5-96',
-          ],
-        },
-      };
     }
   }
 
@@ -251,6 +190,29 @@ module.exports = function (RED) {
           // conn.on('ready', async function () {
           const Client = require('ssh2-sftp-client');
           const client = new Client();
+
+          // Lazy PPK -> PEM conversion (supports PPK v2 and v3 with Argon2id)
+          if (node.sftpConfig.ppkDetected && !node.sftpConfig.ppkConverted) {
+            try {
+              node.status({ fill: 'gray', shape: 'ring', text: 'converting PPK...' });
+              const ppkPass = msg.ppkpassphrase || node.sftpConfig.ppkPassphrase || '';
+              const { PPKParser } = require('ppk-to-openssh');
+              const parser = new PPKParser({ outputFormat: 'pem' });
+              const result = await parser.parse(node.sftpConfig.rawKey, ppkPass);
+              node.sftpConfig.options.privateKey = result.privateKey;
+              node.sftpConfig.ppkConverted = true;
+              console.log('SFTP - PPK converted to PEM: ' + result.algorithm);
+            } catch (err) {
+              const hint = err.message && err.message.includes('Passphrase')
+                ? ' - Set the passphrase in the PPK config or pass it via msg.ppkpassphrase'
+                : '';
+              node.status({ fill: 'red', shape: 'ring', text: 'PPK conversion failed' });
+              done(new Error('PPK conversion failed: ' + err.message + hint));
+              console.error('SFTP - PPK conversion error: ' + err.message + hint);
+              return;
+            }
+          }
+
           try {
             node.status({ fill: 'gray', shape: 'ring', text: 'connection...' });
             await client.connect(node.sftpConfig.options);

@@ -19,27 +19,35 @@
     <label for="node-config-input-host"><i class="fa fa-bookmark"></i> Host</label>
     <input type="text" id="node-config-input-host" placeholder="localhost" style="width: 40%;" />
     <label for="node-config-input-port" style="margin-left: 10px; width: 35px; "> Port</label>
-    <input type="text" id="node-config-input-port" placeholder="21" style="width:45px">
+    <input type="text" id="node-config-input-port" placeholder="22" style="width:45px">
   </div>
   <div class="form-row">
     <label for="node-config-input-username"><i class="fa fa-user"></i> User</label>
-    <input type="text" id="node-config-input-username" placeholder="anonymous" />
+    <input type="text" id="node-config-input-username" placeholder="username" />
   </div>
   <div class="form-row">
     <label for="node-config-input-password"><i class="fa fa-lock"></i> Password</label>
     <input type="password" id="node-config-input-password">
   </div>
   <div class="form-row">
-    <label for="node-config-input-ssh-key-in"><i class="fa fa-lock"></i> SSH-Key file</label>
-    <input type="file" id="node-config-input-ssh-key-in">
+    <label><i class="fa fa-key"></i> SSH Key</label>
+    <span class="ssh-key-input-data">
+      <label class="red-ui-button" for="node-config-input-ssh-key-in">
+        <i class="fa fa-upload"></i> Upload
+      </label>
+      <input class="hide" type="file" id="node-config-input-ssh-key-in">
+      <span id="ssh-key-name" style="width: calc(100% - 230px); overflow: hidden; line-height:34px; height:34px; text-overflow: ellipsis; display: inline-block; vertical-align: middle;"> </span>
+      <button type="button" class="red-ui-button red-ui-button-small" id="ssh-key-clear" style="margin-left: 6px;"><i class="fa fa-times"></i></button>
+    </span>
+    <input type="hidden" id="node-config-input-sshkey">
   </div>
-  <div class="form-row">
-    <label for="node-config-input-selected-sshkey"><i class="fa fa-lock"></i> Selected SSH-Key file </label>
-    <input type="checkbox" disabled id="node-config-input-selected-sshkey">
+  <div class="form-row" id="ssh-key-info-row" style="display:none;">
+    <label><i class="fa fa-info-circle"></i> Key Info</label>
+    <span id="ssh-key-info" style="line-height:34px; height:34px;"></span>
   </div>
-  <div class="form-row">
-    <!-- <label for="node-config-input-sshkey"><i class="fa fa-lock"></i> SSH-Key</label> -->
-    <textarea id="node-config-input-sshkey" style="display:none;"> </textarea>
+  <div class="form-row ppk-passphrase-row" style="display:none;">
+    <label for="node-config-input-ppkpassphrase"><i class="fa fa-lock"></i> PPK Passphrase</label>
+    <input type="password" id="node-config-input-ppkpassphrase" placeholder="Passphrase for encrypted PPK key">
   </div>
   <div class="form-row">
     <label for="node-config-input-hmac"><i class="fa fa-wrench"></i>hmac</label>
@@ -88,33 +96,89 @@
       username: { value: '', required: true },
       password: { value: '' },
       sshkey: { value: '' },
+      ppkpassphrase: { value: '' },
       hmac: { value: 'hmac-sha2-256,hmac-sha2-512,hmac-sha1', required: true },
       cipher: { value: 'aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm', required: true },
+    },
+    credentials: {
+      sshkeydata: { type: 'text' },
     },
     label: function () {
       return this.host;
     },
     oneditprepare: function () {
-      const sshKeyFileIn = document.getElementById('node-config-input-ssh-key-in');
-      const sshKeyFile = document.getElementById('node-config-input-sshkey');
-
-      if (document.getElementById('node-config-input-sshkey').value) {
-        $('#node-config-input-selected-sshkey').prop('checked', true);
+      function updateKeyInfo(content) {
+        var infoRow = $('#ssh-key-info-row');
+        var infoEl = $('#ssh-key-info');
+        var ppkRow = $('.ppk-passphrase-row');
+        if (!content) {
+          infoRow.hide();
+          ppkRow.hide();
+          return;
+        }
+        if (content.indexOf('PuTTY-User-Key-File-') !== -1) {
+          var ver = content.indexOf('PuTTY-User-Key-File-3:') !== -1 ? 'v3' : 'v2';
+          var algoMatch = content.match(/: (\S+)/);
+          var algo = algoMatch ? algoMatch[1] : '?';
+          var encrypted = !/Encryption:\s*none/i.test(content);
+          var encLabel = encrypted ? 'encrypted' : 'unencrypted';
+          infoEl.text('PPK ' + ver + ' / ' + algo + ' / ' + encLabel);
+          infoRow.show();
+          ppkRow.toggle(encrypted);
+        } else {
+          var isOpenSSH = content.indexOf('-----BEGIN OPENSSH PRIVATE KEY-----') !== -1;
+          var isPEM = content.indexOf('-----BEGIN ') !== -1;
+          infoEl.text(isOpenSSH ? 'OpenSSH format' : isPEM ? 'PEM format' : 'Key loaded');
+          infoRow.show();
+          ppkRow.hide();
+        }
       }
 
-      // node-config-input-selected-sshkey
-
-      // let fileOutput = document.getElementById("fileOutput");
-      sshKeyFileIn.addEventListener('change', function () {
-        const fileReader = new FileReader();
-        fileReader.onload = function () {
-          // console.log(fileReader.result);
-          sshKeyFile.value = fileReader.result;
+      function saveFile(file) {
+        var reader = new FileReader();
+        reader.onload = function (event) {
+          var data = event.target.result;
+          $('#ssh-key-name').text(file.name);
+          $('#node-config-input-sshkey').val(data);
+          updateKeyInfo(data);
         };
-        // console.log({ type: this.files[0].type });
-        // console.log({ size: this.files[0].size });
-        fileReader.readAsBinaryString(this.files[0]);
+        reader.readAsText(file, 'UTF-8');
+      }
+
+      function clearKey() {
+        $('#ssh-key-name').text('');
+        $('#node-config-input-sshkey').val('');
+        $('#ssh-key-info-row').hide();
+        $('.ppk-passphrase-row').hide();
+      }
+
+      // Detect if sshkey contains full key content (old format) or just a filename
+      var savedKey = this.sshkey || '';
+      if (savedKey.indexOf('-----BEGIN ') !== -1 || savedKey.indexOf('PuTTY-User-Key-File-') !== -1) {
+        $('#node-config-input-sshkey').val(savedKey);
+        $('#ssh-key-name').text('loaded');
+        updateKeyInfo(savedKey);
+      } else if (savedKey) {
+        $('#ssh-key-name').text(savedKey);
+        var existingData = $('#node-config-input-sshkey').val();
+        if (existingData) updateKeyInfo(existingData);
+      }
+
+      $('#node-config-input-ssh-key-in').on('change', function () {
+        if (this.files && this.files[0]) saveFile(this.files[0]);
       });
+
+      $('#ssh-key-clear').on('click', clearKey);
+    },
+    oneditsave: function () {
+      var keyData = $('#node-config-input-sshkey').val();
+      if (keyData) {
+        var name = $('#ssh-key-name').text();
+        $('#node-config-input-sshkey').val(name);
+        this.credentials.sshkeydata = keyData;
+      } else {
+        this.credentials.sshkeydata = '';
+      }
     },
   });
 </script>
@@ -208,7 +272,6 @@
       var fileExtension = $('.input-fileExtension-row');
       $('#node-input-operation').change(function () {
         var id = $('#node-input-operation option:selected').val();
-        console.log(id);
         if (id == 'list') {
           filename.hide();
           fileExtension.hide();

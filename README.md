@@ -1,52 +1,197 @@
 # @yousolution/node-red-contrib-you-ftp-sftp
 
-A Node-RED node to FTP and SFTP Client (_fork node-red-contrib-ftp-sftp_).
+[![npm version](https://badge.fury.io/js/@yousolution%2Fnode-red-contrib-you-ftp-sftp.svg)](https://badge.fury.io/js/@yousolution%2Fnode-red-contrib-you-ftp-sftp)
+[![Node-RED](https://img.shields.io/badge/Node--RED-3.x-red)](https://nodered.org)
 
-**Adds FTP/SFTP error handling**
-
-Please log issues in the repo for assistance.
-(https://github.com/yousolution-cloud/node-red-contrib-you-ftp-sftp.git)
+Node-RED nodes for FTP, FTPS and SFTP file transfer operations.
 
 ## Install
 
-Run the following command in the root directory of your Node-RED install
+```bash
+npm install @yousolution/node-red-contrib-you-ftp-sftp
+```
 
-    npm install @yousolution/node-red-contrib-you-ftp-sftp
+## Nodes
 
-## Configuration
+This package provides three protocol nodes, each with a **server config node** and an **input node**:
 
-process.env.SFTP_SSH_KEY_FILE - If you want to use private SSH key set this environment variable
+| Node | Protocol | Auth | Library |
+|------|----------|------|---------|
+| `ftp` + `ftp in` | FTP (plain) | Password | [basic-ftp](https://github.com/patrickjuchli/basic-ftp) |
+| `ftps` + `ftps in` | FTP over implicit TLS | Password | [basic-ftp](https://github.com/patrickjuchli/basic-ftp) |
+| `sftp` + `sftp in` | SFTP (SSH) | Password, SSH Key, PPK | [ssh2-sftp-client](https://github.com/theophilusx/ssh2-sftp-client) |
 
-## SFTP & FTP
+## Operations
 
-PUT - Set msg.payload.filedata to the file contents you want pushed and will be uploaded to {GUID}.FileExtension. If you need more changes file request to github.
+All three nodes support the same four operations:
 
-GET - Set msg.payload.filename to get the file or will use Workdir + Filename in configuration. Leave configuration blank to set in code.
+| Operation | Description |
+|-----------|-------------|
+| `list` | List files in the working directory |
+| `get` | Download a file |
+| `put` | Upload a file |
+| `delete` | Delete a file |
 
-DELETE - Set msg.payload.filename to delete the file or will use Workdir + Filename in configuration. Leave configuration blank to set in code.
+---
 
-LIST - Uses the workdir
+## Server Config Nodes
 
-## Sample Function Node
+### FTP / FTPS Config
 
-<PRE>
-// ----------------------------------------------------
-//      All functions above use information.
-//      Sample Javascript Used In Function Node
-// ----------------------------------------------------
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| Host | string | `localhost` | Server hostname or IP |
+| Port | number | `21` | Server port |
+| User | string | `anonymous` | Username |
+| Password | string | `anonymous@` | Password |
+| Connection Timeout | number | `10000` | Connection timeout (ms) |
+| PASV Timeout | number | `10000` | PASV mode timeout (ms) |
+| Keepalive | number | `10000` | Keepalive interval (ms) |
+| Secure | boolean | `false` | Use TLS for data channel (FTP only) |
+| Secure Options | string | — | TLS options (FTP only) |
+
+> FTPS forces `secure: true` and `rejectUnauthorized: false`.
+
+### SFTP Config
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| Host | string | `localhost` | Server hostname or IP |
+| Port | number | `22` | Server port |
+| Username | string | — | SSH username |
+| Password | string | — | SSH password |
+| SSH-Key file | file | — | PEM, OpenSSH, or PPK private key |
+| PPK Passphrase | password | — | Passphrase for encrypted PPK keys |
+| hmac | select | `hmac-sha2-256,hmac-sha2-512,hmac-sha1` | Allowed HMAC algorithms (multi-select) |
+| cipher | select | `aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm` | Allowed ciphers (multi-select) |
+
+---
+
+## Input Node: Message Properties
+
+### Input Messages (`msg`)
+
+| Property | Type | Applicable | Description |
+|----------|------|------------|-------------|
+| `msg.host` | string | All | Override server host |
+| `msg.port` | number | All | Override server port |
+| `msg.user` | string | FTP/FTPS | Override username |
+| `msg.password` | string | All | Override password |
+| `msg.workdir` | string | All | Override working directory |
+| `msg.payload.filename` | string | get/delete/put | File path (overrides config) |
+| `msg.payload.filedata` | string/Buffer | put | File content to upload |
+| `msg.ppkpassphrase` | string | SFTP only | Override PPK passphrase at runtime |
+
+### Output Messages (`msg`)
+
+| Operation | Output |
+|-----------|--------|
+| `list` | `msg.payload` — Array of file entries |
+| `get` | `msg.payload.filedata` — File content, `msg.payload.filename` — Remote path |
+| `put` | `msg.payload.filename` — Remote path of uploaded file |
+| `delete` | `msg.payload.filename` — Deleted file path |
+
+### Status
+
+The node updates its status indicator during operations:
+
+| Status | Description |
+|--------|-------------|
+| 🟡 `connection...` | Connecting to server |
+| 🟢 `connected` | Connected successfully |
+| 🟢 `list done` / `get done` / `put done` / `delete done` | Operation completed |
+| 🔴 `connection failed.` | Connection failed |
+| 🔴 `list failed` / ... | Operation failed |
+| 🟡 `converting PPK...` | PPK key conversion in progress (SFTP only) |
+
+---
+
+## Authentication
+
+### FTP / FTPS
+
+Username and password only.
+
+### SFTP
+
+The SFTP node supports three authentication methods (tried in order):
+
+1. **SSH Private Key** (PEM or OpenSSH format)
+   - Upload the key file in the node config, or
+   - Set the `SFTP_SSH_KEY_FILE` environment variable
+
+2. **PPK Key** (PuTTY format, v2 and v3)
+   - Upload the `.ppk` file in the node config
+   - If the PPK is encrypted, provide the passphrase
+   - The node automatically converts PPK to PEM using [`ppk-to-openssh`](https://github.com/cartpauj/ppk-to-openssh)
+   - Supports all key types: RSA, DSA, ECDSA (P-256/P-384/P-521), Ed25519
+   - Supports PPK v3 with Argon2id key derivation
+
+3. **Password** (fallback if no key is provided)
+
+> Pass the passphrase for encrypted keys via the config UI or at runtime via `msg.ppkpassphrase`.
+
+---
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `SFTP_SSH_KEY_FILE` | Path to an SSH private key file (PEM/OpenSSH/PPK). Resolved relative to the project root. |
+
+---
+
+## Examples
+
+### Upload a file
+
+```javascript
 msg.payload = {};
-msg.payload.filename="./SAMPLE_FILE.txt"; // Full Path
-msg.payload.filedata='{}'; // Needs to be a string
+msg.payload.filename = "/remote/path/file.txt";
+msg.payload.filedata = "file content";
 return msg;
-// ----------------------------------------------------
-</PRE>
+```
 
-## Acknowledgements
+### Download a file
 
-The node-red-contrib-force uses the following open source software:
+```javascript
+msg.payload = {};
+msg.payload.filename = "/remote/path/file.txt";
+return msg;
+```
 
-- [node-ftp-sftp](https://github.com/yousolution-cloud/node-red-contrib-you-ftp-sftp): node-ftp is an FTP and SFTP client module for node.js that provides an asynchronous interface for communicating with an FTP and SFTP servers.
+### List directory
+
+```javascript
+msg.workdir = "/remote/path/";
+return msg;
+```
+
+### Delete a file
+
+```javascript
+msg.payload = {};
+msg.payload.filename = "/remote/path/file.txt";
+return msg;
+```
+
+### Override connection at runtime
+
+```javascript
+msg.host = "192.168.1.100";
+msg.port = 22;
+msg.user = "admin";
+msg.password = "secret";
+msg.ppkpassphrase = "my-ppk-passphrase"; // for encrypted PPK keys
+return msg;
+```
+
+---
+
+## Changelog
+
+See [history.md](history.md).
 
 ## License
 
-See [license](https://github.com/yousolution-cloud/node-red-contrib-you-ftp-sftp/blob/master/LICENSE) (Apache License Version 2.0).
+Apache 2.0 — see [LICENSE](LICENSE).
