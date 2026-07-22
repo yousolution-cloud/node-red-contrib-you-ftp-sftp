@@ -41,6 +41,17 @@ services:
       TLS_ORG: 'YourOrg'
       TLS_C: 'DE'
 
+  sftp:
+    image: atmoz/sftp:alpine
+    container_name: sftp
+    ports:
+      - '2222:22'
+    volumes:
+      - ./sftp/data:/home/testuser/upload
+      - ./sftp/keys/id_rsa.pub:/home/testuser/.ssh/keys/id_rsa.pub:ro
+    command: testuser:test123:::upload
+    restart: unless-stopped
+
   # pure-ftpd:
   #   container_name: ftp
   #   image: stilliard/pure-ftpd

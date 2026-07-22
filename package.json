@@ -6,7 +6,12 @@
   "scripts": {
     "update": "npm pack && mv yousolution-node-red-contrib-you-ftp-sftp-$npm_package_version.tgz ./data && cd data && npm i yousolution-node-red-contrib-you-ftp-sftp-$npm_package_version.tgz && docker-compose restart",
     "test": "mocha 'test/**/*.spec.js'",
-    "coverage": "nyc npm run test"
+    "coverage": "nyc npm run test",
+    "sftp:keygen": "mkdir -p sftp/keys && ssh-keygen -t rsa -b 4096 -m PEM -N \"\" -f sftp/keys/id_rsa",
+    "sftp:keygen:force": "rm -f sftp/keys/id_rsa sftp/keys/id_rsa.pub && npm run sftp:keygen",
+    "sftp:up": "docker compose up -d sftp",
+    "sftp:down": "docker compose stop sftp",
+    "sftp:logs": "docker compose logs -f sftp"
   },
   "repository": {
     "type": "git",
