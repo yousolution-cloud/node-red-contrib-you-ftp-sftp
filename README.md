@@ -32,6 +32,10 @@ All three nodes support the same four operations:
 | `put` | Upload a file |
 | `delete` | Delete a file |
 
+RENAME - Set msg.payload.filename and msg.payload.newfilename Leave configuration blank to set in code.
+
+DELETE - Set msg.payload.filename to delete the file or will use Workdir + Filename in configuration. Leave configuration blank to set in code.
+
 ---
 
 ## Server Config Nodes

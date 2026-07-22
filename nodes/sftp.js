@@ -347,6 +347,23 @@ module.exports = function (RED) {
                 console.error(err.message);
               }
               break;
+            case 'rename':
+              try{
+                let ftpfilename = node.workdir + node.filename;
+                let ftpnewfilename = node.workdir + node.newfilename;
+                if (msg.payload.filename) ftpfilename = msg.payload.filename;
+                if (msg.payload.newfilename) ftpnewfilename = msg.payload.newfilename;
+                console.log('SFTP Renaming File: ' + ftpfilename + ' to ' + ftpnewfilename);
+                await client.rename(ftpfilename, ftpnewfilename);
+                node.status({ fill: 'green', shape: 'dot', text: 'rename done' });
+                await client.end();
+                node.send(msg);
+              } catch (err) {
+                node.status({ fill: 'red', shape: 'ring', text: 'rename failed' });
+                done(err);
+                console.error(err.message);
+              }
+              break;
 
             case 'delete':
               try {

@@ -81,6 +81,7 @@
       <option value="list">list</option>
       <option value="get">get</option>
       <option value="put">put</option>
+      <option value="rename">rename</option>
       <option value="delete">delete</option>
     </select>
   </div>
@@ -91,6 +92,10 @@
   <div class="form-row input-filename-row hidden">
     <label for="node-input-filename"><i class="fa fa-file"></i> Filename</label>
     <input type="text" id="node-input-filename" placeholder="Filename">
+  </div>
+  <div class="form-row input-newfilename-row hidden">
+    <label for="node-input-newfilename"><i class="fa fa-file"></i> New Filename</label>
+    <input type="text" id="node-input-newfilename" placeholder="New Filename">
   </div>
   <div class="form-row input-fileExtension-row hidden">
     <label for="node-input-fileExtension"><i class="fa fa-file"></i> File Extension</label>
@@ -117,6 +122,7 @@
   <ul>
   <li><b>PUT</b> - Set <code>msg.payload.filedata</code> to the file contents you want pushed and will be uploaded to {GUID}.FileExtension. If you need more changes file request to github.</li>
   <li><b>GET</b> - Set <code>msg.payload.filename</code> to get the file or will use Workdir + Filename in configuration. Leave configuration blank to set in code.</li>
+  <li><b>RENAME</b> - Set <code>msg.payload.filename</code> and <code>msg.payload.newfilename</code> Leave configuration blank to set in code.</li>
   <li><b>DELETE</b> - Set <code>msg.payload.filename</code> to delete the file or will use Workdir + Filename in configuration. Leave configuration blank to set in code.</li>
   <li><b>LIST</b> - Uses the workdir</li>
   </ul>
@@ -159,6 +165,9 @@
         } else if (id == 'put') {
           filename.show();
           fileExtension.show();
+        }  else if (id == 'rename') {
+          filename.show();
+          newfilename.show();
         } else if (id == 'get') {
           filename.show();
           fileExtension.hide();
