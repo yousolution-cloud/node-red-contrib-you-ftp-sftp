@@ -34,7 +34,9 @@ module.exports = function (RED) {
   'use strict';
 
   // const sftp = require('ssh2').Client;
-  const fs = require('fs');
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
 
   function SFtpNode(n) {
     RED.nodes.createNode(this, n);
@@ -60,6 +62,38 @@ module.exports = function (RED) {
       if (trimmed.startsWith('-----BEGIN ') || trimmed.startsWith('PuTTY-User-Key-File-')) {
         keyFile = 'keyFile';
         keyData = n.sshkey;
+      } else if (trimmed !== 'loaded') {
+        console.log('SFTP - sshkey non contiene una chiave ma "' + trimmed.substring(0, 80) + '", provo a leggerlo come file...');
+        const tryPaths = [];
+        if (path.isAbsolute(trimmed)) {
+          tryPaths.push(path.resolve(trimmed));
+        } else {
+          tryPaths.push(path.resolve(process.cwd(), trimmed));
+          tryPaths.push(path.resolve('/data/', trimmed));
+          tryPaths.push(path.resolve(os.homedir(), '.node-red', trimmed));
+          tryPaths.push(path.resolve(os.homedir(), trimmed));
+          tryPaths.push(path.resolve(os.homedir(), 'Desktop', trimmed));
+          tryPaths.push(path.resolve(os.homedir(), 'Downloads', trimmed));
+          tryPaths.push(path.resolve(__dirname, '../../' + trimmed));
+        }
+        console.log('SFTP - Cerco il file in:');
+        for (const fp of tryPaths) {
+          console.log('  - ' + fp);
+          try {
+            const content = fs.readFileSync(fp, 'utf8');
+            if (content.includes('PuTTY-User-Key-File-') || content.includes('-----BEGIN ')) {
+              keyData = content;
+              keyFile = fp;
+              console.log('SFTP - OK: chiave letta da ' + fp);
+              break;
+            }
+          } catch (_) { /* non trovato */ }
+        }
+        if (!keyData) {
+          console.log('SFTP - WARNING: File "' + trimmed + '" non trovato.');
+          console.log('SFTP -   Se usi Docker: docker cp /percorso/locale/' + trimmed + ' <container>:/data/' + trimmed);
+          console.log('SFTP -   Oppure incolla il contenuto della chiave nel campo SSH Key dell\'editor, o usa Upload.');
+        }
       }
     }
     if (process.env.SFTP_SSH_KEY_FILE) {
@@ -192,6 +226,7 @@ module.exports = function (RED) {
           const client = new Client();
 
           // Lazy PPK -> PEM conversion (supports PPK v2 and v3 with Argon2id)
+          console.log('SFTP - PPK state: detected=' + node.sftpConfig.ppkDetected + ' converted=' + node.sftpConfig.ppkConverted);
           if (node.sftpConfig.ppkDetected && !node.sftpConfig.ppkConverted) {
             try {
               node.status({ fill: 'gray', shape: 'ring', text: 'converting PPK...' });
@@ -200,7 +235,6 @@ module.exports = function (RED) {
               const parser = new PPKParser({ outputFormat: 'pem' });
               const result = await parser.parse(node.sftpConfig.rawKey, ppkPass);
               node.sftpConfig.options.privateKey = result.privateKey;
-              node.sftpConfig.ppkConverted = true;
               console.log('SFTP - PPK converted to PEM: ' + result.algorithm);
             } catch (err) {
               const hint = err.message && err.message.includes('Passphrase')
@@ -215,10 +249,33 @@ module.exports = function (RED) {
 
           try {
             node.status({ fill: 'gray', shape: 'ring', text: 'connection...' });
+
+            const opts = node.sftpConfig.options;
+            const hostPort = opts.host + ':' + opts.port;
+            const user = opts.username;
+            let authInfo = 'none';
+            if (opts.privateKey) {
+              const pk = opts.privateKey;
+              if (pk.includes('BEGIN OPENSSH')) authInfo = 'OpenSSH key';
+              else if (pk.includes('BEGIN RSA PRIVATE KEY')) authInfo = 'RSA PEM key';
+              else if (pk.includes('BEGIN EC PRIVATE KEY')) authInfo = 'EC PEM key';
+              else if (pk.includes('BEGIN DSA PRIVATE KEY')) authInfo = 'DSA PEM key';
+              else if (pk.includes('BEGIN PRIVATE KEY')) authInfo = 'PKCS8 PEM key';
+              else authInfo = 'private key (unknown format)';
+            } else if (opts.password) {
+              authInfo = 'password';
+            }
+            console.log('SFTP - Config: ' + node.sftpConfig.id + ' -> ' + hostPort + ' as ' + user + ' (auth: ' + authInfo + ')');
+
             await client.connect(node.sftpConfig.options);
+            node.sftpConfig.ppkConverted = true;
             node.status({ fill: 'green', shape: 'ring', text: 'connected' });
           } catch (err) {
             node.status({ fill: 'red', shape: 'ring', text: 'connection failed.' });
+            console.error('SFTP - Connection error: ' + err.message);
+            if (err.level) console.error('SFTP - Error level: ' + err.level);
+            if (err.description) console.error('SFTP - Error description: ' + err.description);
+            if (err.code) console.error('SFTP - Error code: ' + err.code);
             done(err);
             console.error(err.message);
             return;

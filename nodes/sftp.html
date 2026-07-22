@@ -161,7 +161,14 @@
       } else if (savedKey) {
         $('#ssh-key-name').text(savedKey);
         var existingData = $('#node-config-input-sshkey').val();
-        if (existingData) updateKeyInfo(existingData);
+        if (existingData) {
+          updateKeyInfo(existingData);
+        } else {
+          // Filename senza contenuto — il server proverà a leggerlo dal disco
+          $('#ssh-key-info').text('Filename — verrà letto dal disco all\'avvio');
+          $('#ssh-key-info-row').show();
+          $('.ppk-passphrase-row').show();
+        }
       }
 
       $('#node-config-input-ssh-key-in').on('change', function () {
@@ -173,8 +180,6 @@
     oneditsave: function () {
       var keyData = $('#node-config-input-sshkey').val();
       if (keyData) {
-        var name = $('#ssh-key-name').text();
-        $('#node-config-input-sshkey').val(name);
         this.credentials.sshkeydata = keyData;
       } else {
         this.credentials.sshkeydata = '';
